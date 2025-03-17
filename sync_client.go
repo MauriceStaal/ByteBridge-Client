@@ -107,6 +107,35 @@ func DownloadFile(fileID int, filename string) error {
 	return nil
 }
 
+// SyncFiles checks if the files from the server exist on the client and downloads the missing ones
+func SyncFiles() {
+	for {
+		// Fetch the list of files from the server
+		files, err := FetchFiles()
+		if err != nil {
+			fmt.Println("Error fetching files:", err)
+			time.Sleep(30 * time.Second)
+			continue
+		}
+
+		// Check for each file if it exists on the client, and if not, download it
+		for _, file := range files {
+			if !FileExists(file.Name) {
+				fmt.Println("File not found locally, downloading:", file.ID, file.Name)
+				err := DownloadFile(file.ID, file.Name)
+				if err != nil {
+					fmt.Println("Error downloading file:", err)
+				}
+			} else {
+				fmt.Println("File already exists locally:", file.Name)
+			}
+		}
+
+		// Wait for 30 seconds before checking again
+		time.Sleep(30 * time.Second)
+	}
+}
+
 // DeleteFileOnServer deletes a file from the server
 func DeleteFileOnServer(fileID int) error {
 	url := fmt.Sprintf("http://localhost:5191/api/v1/File/%d", fileID)
@@ -215,6 +244,14 @@ func UploadFileWithDebounce(filePath string) {
 		}
 	}
 
+	// Check if the file already exists on the server
+	fileID, err := GetFileIDByName(filepath.Base(filePath))
+	if err == nil && fileID > 0 {
+		// If the file exists on the server, skip the upload
+		fmt.Println("File already exists on the server, skipping upload:", filePath)
+		return
+	}
+
 	// Upload the file if it's not a duplicate
 	UploadFile(filePath)
 
@@ -284,6 +321,11 @@ func UploadFile(filePath string) {
 }
 
 func main() {
+	// Start the folder watcher in a separate goroutine
 	go WatchFolder(syncFolder)
+
+	// Start syncing files in another goroutine
+	go SyncFiles()
+
 	time.Sleep(time.Hour * 24) // Keep the watcher running
 }
