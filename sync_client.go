@@ -127,7 +127,7 @@ func DeleteFileOnServer(fileID int) error {
 }
 
 // WatchFolder watches for changes in the sync folder and uploads new, modified, or deleted files
-func WatchFolder() {
+func WatchFolder(syncFolder string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		fmt.Println("Error creating watcher:", err)
@@ -143,18 +143,24 @@ func WatchFolder() {
 				if !ok {
 					return
 				}
-				if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
+
+				switch {
+				case event.Op&(fsnotify.Create|fsnotify.Write) != 0:
 					fmt.Println("Detected change in:", event.Name)
 					UploadFile(event.Name)
-				} else if event.Op&fsnotify.Remove != 0 {
+
+				case event.Op&fsnotify.Remove != 0:
 					fmt.Println("Detected deletion of:", event.Name)
-					fileID, err := GetFileIDByName(filepath.Base(event.Name))
-					if err == nil {
-						DeleteFileOnServer(fileID)
-					} else {
-						fmt.Println("Error finding file ID for deletion:", err)
+					handleFileDeletion(event.Name)
+
+				case event.Op&fsnotify.Rename != 0:
+					// Rename could mean either a rename or deletion (on Linux)
+					if _, err := os.Stat(event.Name); os.IsNotExist(err) {
+						fmt.Println("Detected possible deletion (rename event):", event.Name)
+						handleFileDeletion(event.Name)
 					}
 				}
+
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
@@ -169,6 +175,17 @@ func WatchFolder() {
 		return
 	}
 	<-done
+}
+
+// handleFileDeletion processes file deletions
+func handleFileDeletion(filePath string) {
+	fileID, err := GetFileIDByName(filepath.Base(filePath))
+	if err == nil {
+		fmt.Println("Deleting file from server:", fileID)
+		DeleteFileOnServer(fileID)
+	} else {
+		fmt.Println("Error finding file ID for deletion:", err)
+	}
 }
 
 // UploadFile uploads a new or modified file to the API using multipart/form-data
