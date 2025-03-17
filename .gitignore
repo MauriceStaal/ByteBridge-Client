@@ -1,0 +1,35 @@
+# Go binary files
+/bin/
+/obj/
+
+# GoLand project files
+.idea/
+
+# Ignore specific GoLand IDE settings files
+.idea/workspace.xml
+.idea/modules.xml
+.idea/vcs.xml
+
+# Go build artifacts
+*.exe
+*.exe~
+*.out
+*.test
+*.log
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+.desktop
+
+# Other IDE files
+.vscode/
+
+# GoLand specific settings
+.idea/*
+!.idea/inspectionProfiles
+!.idea/tasks.xml
+
+# Linux-specific files
+*~                # Backup files (e.g., vim, emacs)
+*.swp             # Swap files (e.g., vim)
