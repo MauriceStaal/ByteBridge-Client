@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -170,7 +171,7 @@ func WatchFolder() {
 	<-done
 }
 
-// UploadFile uploads a new or modified file to the API
+// UploadFile uploads a new or modified file to the API using multipart/form-data
 func UploadFile(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -179,28 +180,50 @@ func UploadFile(filePath string) {
 	}
 	defer file.Close()
 
-	fileBytes, err := ioutil.ReadAll(file)
+	// Create a buffer and multipart writer
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add the file
+	part, err := writer.CreateFormFile("FileAttachment", filepath.Base(filePath))
 	if err != nil {
-		fmt.Println("Error reading file:", err)
+		fmt.Println("Error creating form file:", err)
+		return
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		fmt.Println("Error copying file to form part:", err)
 		return
 	}
 
-	requestBody, err := json.Marshal(map[string]interface{}{
-		"Name":           filepath.Base(filePath),
-		"FileAttachment": fileBytes,
-	})
+	// Add the name field
+	_ = writer.WriteField("Name", filepath.Base(filePath))
+
+	// Close the writer to finalize the multipart form
+	err = writer.Close()
 	if err != nil {
-		fmt.Println("Error encoding JSON:", err)
+		fmt.Println("Error closing writer:", err)
 		return
 	}
 
-	resp, err := http.Post("http://localhost:5191/api/v1/File", "application/json", bytes.NewBuffer(requestBody))
+	// Create request
+	req, err := http.NewRequest("POST", "http://localhost:5191/api/v1/File", body)
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("Error uploading file:", err)
 		return
 	}
 	defer resp.Body.Close()
 
+	// Check response status
 	if resp.StatusCode != http.StatusOK {
 		fmt.Println("Failed to upload file, status code:", resp.StatusCode)
 		return
