@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -27,6 +28,9 @@ type File struct {
 }
 
 const syncFolder = "/home/erwin/Documents/GoSync"
+
+var uploadMutex sync.Mutex
+var lastUploaded = make(map[string]time.Time)
 
 // FetchFiles requests the list of files from the API and returns them
 func FetchFiles() ([]File, error) {
@@ -147,7 +151,7 @@ func WatchFolder(syncFolder string) {
 				switch {
 				case event.Op&(fsnotify.Create|fsnotify.Write) != 0:
 					fmt.Println("Detected change in:", event.Name)
-					UploadFile(event.Name)
+					UploadFileWithDebounce(event.Name)
 
 				case event.Op&fsnotify.Remove != 0:
 					fmt.Println("Detected deletion of:", event.Name)
@@ -186,6 +190,36 @@ func handleFileDeletion(filePath string) {
 	} else {
 		fmt.Println("Error finding file ID for deletion:", err)
 	}
+}
+
+// UploadFileWithDebounce uploads a file with debouncing to prevent duplicate uploads
+func UploadFileWithDebounce(filePath string) {
+	uploadMutex.Lock() // Lock to prevent concurrent uploads
+	defer uploadMutex.Unlock()
+
+	// Wait for a short delay before proceeding to avoid rapid consecutive events
+	time.Sleep(500 * time.Millisecond)
+
+	// Check if the file still exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Println("File no longer exists, skipping upload:", filePath)
+		return
+	}
+
+	// Check if the file was uploaded recently
+	if lastTime, exists := lastUploaded[filePath]; exists {
+		// Skip the upload if it was done within the last 2 seconds
+		if time.Since(lastTime) < 2*time.Second {
+			fmt.Println("Skipping duplicate upload:", filePath)
+			return
+		}
+	}
+
+	// Upload the file if it's not a duplicate
+	UploadFile(filePath)
+
+	// Update the last upload time for the file
+	lastUploaded[filePath] = time.Now()
 }
 
 // UploadFile uploads a new or modified file to the API using multipart/form-data
@@ -250,6 +284,6 @@ func UploadFile(filePath string) {
 }
 
 func main() {
-	go WatchFolder()
+	go WatchFolder(syncFolder)
 	time.Sleep(time.Hour * 24) // Keep the watcher running
 }
