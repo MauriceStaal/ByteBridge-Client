@@ -1,4 +1,6 @@
-package main
+package sync
+
+// Contains sync logic for checking and downloading files
 
 import (
 	"bytes"
@@ -12,8 +14,6 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
-	"github.com/fsnotify/fsnotify"
 )
 
 // File represents the structure of a file from the API response
@@ -26,8 +26,6 @@ type File struct {
 	CreatedOn string `json:"createdOn"`
 	UpdatedOn string `json:"updatedOn"`
 }
-
-const syncFolder = "/home/erwin/Documents/GoSync"
 
 var uploadMutex sync.Mutex
 var lastUploaded = make(map[string]time.Time)
@@ -73,42 +71,14 @@ func GetFileIDByName(filename string) (int, error) {
 }
 
 // FileExists checks if a file exists in the sync folder
-func FileExists(filename string) bool {
+func FileExists(syncFolder, filename string) bool {
 	filePath := filepath.Join(syncFolder, filename)
 	_, err := os.Stat(filePath)
 	return err == nil
 }
 
-// DownloadFile downloads a missing file from the API
-func DownloadFile(fileID int, filename string) error {
-	url := fmt.Sprintf("http://localhost:5191/api/v1/File/%d", fileID)
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to download file %s: %w", filename, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code when downloading %s: %d", filename, resp.StatusCode)
-	}
-
-	filePath := filepath.Join(syncFolder, filename)
-	file, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", filename, err)
-	}
-	defer file.Close()
-
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to save file %s: %w", filename, err)
-	}
-
-	return nil
-}
-
 // SyncFiles checks if the files from the server exist on the client and downloads the missing ones
-func SyncFiles() {
+func SyncFiles(syncFolder string) {
 	for {
 		// Fetch the list of files from the server
 		files, err := FetchFiles()
@@ -120,9 +90,9 @@ func SyncFiles() {
 
 		// Check for each file if it exists on the client, and if not, download it
 		for _, file := range files {
-			if !FileExists(file.Name) {
+			if !FileExists(syncFolder, file.Name) {
 				fmt.Println("File not found locally, downloading:", file.ID, file.Name)
-				err := DownloadFile(file.ID, file.Name)
+				err := DownloadFile(syncFolder, file.ID, file.Name)
 				if err != nil {
 					fmt.Println("Error downloading file:", err)
 				}
@@ -159,59 +129,8 @@ func DeleteFileOnServer(fileID int) error {
 	return nil
 }
 
-// WatchFolder watches for changes in the sync folder and uploads new, modified, or deleted files
-func WatchFolder(syncFolder string) {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		fmt.Println("Error creating watcher:", err)
-		return
-	}
-	defer watcher.Close()
-
-	done := make(chan bool)
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-
-				switch {
-				case event.Op&(fsnotify.Create|fsnotify.Write) != 0:
-					fmt.Println("Detected change in:", event.Name)
-					UploadFileWithDebounce(event.Name)
-
-				case event.Op&fsnotify.Remove != 0:
-					fmt.Println("Detected deletion of:", event.Name)
-					handleFileDeletion(event.Name)
-
-				case event.Op&fsnotify.Rename != 0:
-					// Rename could mean either a rename or deletion (on Linux)
-					if _, err := os.Stat(event.Name); os.IsNotExist(err) {
-						fmt.Println("Detected possible deletion (rename event):", event.Name)
-						handleFileDeletion(event.Name)
-					}
-				}
-
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				fmt.Println("Watcher error:", err)
-			}
-		}
-	}()
-
-	if err := watcher.Add(syncFolder); err != nil {
-		fmt.Println("Error adding folder to watcher:", err)
-		return
-	}
-	<-done
-}
-
 // handleFileDeletion processes file deletions
-func handleFileDeletion(filePath string) {
+func HandleFileDeletion(filePath string) {
 	fileID, err := GetFileIDByName(filepath.Base(filePath))
 	if err == nil {
 		fmt.Println("Deleting file from server:", fileID)
@@ -318,14 +237,4 @@ func UploadFile(filePath string) {
 	}
 
 	fmt.Println("File uploaded successfully:", filePath)
-}
-
-func main() {
-	// Start the folder watcher in a separate goroutine
-	go WatchFolder(syncFolder)
-
-	// Start syncing files in another goroutine
-	go SyncFiles()
-
-	time.Sleep(time.Hour * 24) // Keep the watcher running
 }

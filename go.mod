@@ -1,4 +1,4 @@
-module goSync
+module ByteBridge-Client
 
 go 1.24
 
