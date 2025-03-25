@@ -17,11 +17,10 @@ De ByteBridge-Client is ontworpen om bestanden te synchroniseren tussen een clie
 
 - Integreren met de socket van de server. [Max]
 - Bestanden verwijderen als ze niet meer op de server staan. [Erwin]
-- Bestanden check bij opstarten client
-- Subfolders
+- Bestanden check bij opstarten client [Erwin]
+- Subfolders [Erwin]
 - --dev of --debug flag toevoegen voor logging in de terminal [Max]
-- 204 status fixen
 
 ### Optioneel
 
-- User laten selecteren welke folder te syncen i.p.v hardcoded de folder erin zetten.
+- User laten selecteren welke folder te syncen i.p.v hardcoded de folder erin zetten. [Max]
