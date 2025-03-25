@@ -11,3 +11,15 @@ De ByteBridge-Client is ontworpen om bestanden te synchroniseren tussen een clie
 ### Client:
 1. **Geen Inhoudswijziging Detectie**: Wijzigingen in de inhoud van een bestand triggeren momenteel geen automatische update.
 2. **WebSocket-ondersteuning Ontbreekt**: De client luistert momenteel niet naar WebSocket-gebeurtenissen voor real-time updates.
+
+
+## TODO
+
+- Integreren met de socket van de server.
+- Bestanden verwijderen als ze niet meer op de server staan.
+- Bestanden check bij opstarten client
+- Subfolders
+  
+### Optioneel
+
+- User laten selecteren welke folder te syncen i.p.v hardcoded de folder erin zetten.
