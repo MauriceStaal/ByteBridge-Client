@@ -3,12 +3,20 @@ package main
 import (
 	"ByteBridge-Client/sync"
 	"ByteBridge-Client/watcher"
+	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 )
 
-const syncFolder = "/home/erwin/Documents/ByteBridge-Client"
-
 func main() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println("Error fetching home dir: ", err)
+		return
+	}
+
+	syncFolder := filepath.Join(home, "Documents", "SyncFolder")
 	// Start the folder watcher in a separate goroutine
 	go watcher.WatchFolder(syncFolder)
 
