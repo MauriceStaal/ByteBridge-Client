@@ -32,7 +32,7 @@ var lastUploaded = make(map[string]time.Time)
 
 // FetchFiles requests the list of files from the API and returns them
 func FetchFiles() ([]File, error) {
-	url := "http://localhost:5191/api/v1/File"
+	url := "https://bytebridge.es8.nl/api/v1/File"
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
@@ -108,7 +108,7 @@ func SyncFiles(syncFolder string) {
 
 // DeleteFileOnServer deletes a file from the server
 func DeleteFileOnServer(fileID int) error {
-	url := fmt.Sprintf("http://localhost:5191/api/v1/File/%d", fileID)
+	url := fmt.Sprintf("https://bytebridge.es8.nl/api/v1/File/%d", fileID)
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create delete request: %w", err)
@@ -214,7 +214,7 @@ func UploadFile(filePath string) {
 	}
 
 	// Create request
-	req, err := http.NewRequest("POST", "http://localhost:5191/api/v1/File", body)
+	req, err := http.NewRequest("POST", "https://bytebridge.es8.nl/api/v1/File", body)
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return
