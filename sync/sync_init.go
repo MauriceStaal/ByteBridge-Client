@@ -1,12 +1,9 @@
 package sync
 
+// Contains sync logic that syncs everything on client startup
+
 import (
-	"crypto/md5"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 )
@@ -85,44 +82,4 @@ func CheckAndSyncFiles(syncFolder string) {
 	}
 
 	log.Println("File synchronization completed.")
-}
-
-// FetchDeletedFiles retrieves the list of deleted files from the server
-func FetchDeletedFiles() ([]File, error) {
-	url := "https://bytebridge.es8.nl/api/v1/File/deleted"
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	log.Println("FetchDeletedFiles API response status:", resp.StatusCode)
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	log.Println("FetchDeletedFiles API response body:", string(body))
-
-	var files []File
-	if err := json.Unmarshal(body, &files); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	return files, nil
-}
-
-// CalculateFileHash computes the MD5 hash of a file, which is used to check if files are identical
-func CalculateFileHash(filePath string) (string, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	hash := fmt.Sprintf("%x", md5.Sum(data))
-	return hash, nil
 }

@@ -1,145 +1,20 @@
 package sync
 
-// Contains sync logic for checking and downloading files
+// Contains logic for uploading files
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
-// File represents the structure of a file from the API response
-type File struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Hash      string `json:"hash"`
-	Extension string `json:"extension"`
-	CreatedOn string `json:"createdOn"`
-	UpdatedOn string `json:"updatedOn"`
-}
-
-var uploadMutex sync.Mutex
-var lastUploaded = make(map[string]time.Time)
-
-// FetchFiles requests the list of files from the API and returns them
-func FetchFiles() ([]File, error) {
-	url := "https://bytebridge.es8.nl/api/v1/File"
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var files []File
-	if err := json.Unmarshal(body, &files); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	return files, nil
-}
-
-// GetFileIDByName retrieves the file ID from the server by filename
-func GetFileIDByName(filename string) (int, error) {
-	files, err := FetchFiles()
-	if err != nil {
-		return 0, err
-	}
-	for _, file := range files {
-		if file.Name == filename {
-			return file.ID, nil
-		}
-	}
-	return 0, fmt.Errorf("file ID not found for %s", filename)
-}
-
-// FileExists checks if a file exists in the sync folder
-func FileExists(syncFolder, filename string) bool {
-	filePath := filepath.Join(syncFolder, filename)
-	_, err := os.Stat(filePath)
-	return err == nil
-}
-
-// SyncFiles checks if the files from the server exist on the client and downloads the missing ones
-func SyncFiles(syncFolder string) {
-	for {
-		// Fetch the list of files from the server
-		files, err := FetchFiles()
-		if err != nil {
-			fmt.Println("Error fetching files:", err)
-			time.Sleep(30 * time.Second)
-			continue
-		}
-
-		// Check for each file if it exists on the client, and if not, download it
-		for _, file := range files {
-			if !FileExists(syncFolder, file.Name) {
-				fmt.Println("File not found locally, downloading:", file.ID, file.Name)
-				err := DownloadFile(syncFolder, file.ID, file.Name)
-				if err != nil {
-					fmt.Println("Error downloading file:", err)
-				}
-			} else {
-				fmt.Println("File already exists locally:", file.Name)
-			}
-		}
-
-		// Wait for 30 seconds before checking again
-		time.Sleep(30 * time.Second)
-	}
-}
-
-// DeleteFileOnServer deletes a file from the server
-func DeleteFileOnServer(fileID int) error {
-	url := fmt.Sprintf("https://bytebridge.es8.nl/api/v1/File/%d", fileID)
-	req, err := http.NewRequest("DELETE", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create delete request: %w", err)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send delete request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code when deleting file: %d", resp.StatusCode)
-	}
-
-	fmt.Println("File deleted successfully from server")
-	return nil
-}
-
-// handleFileDeletion processes file deletions
-func HandleFileDeletion(filePath string) {
-	fileID, err := GetFileIDByName(filepath.Base(filePath))
-	if err == nil {
-		fmt.Println("Deleting file from server:", fileID)
-		DeleteFileOnServer(fileID)
-	} else {
-		fmt.Println("Error finding file ID for deletion:", err)
-	}
-}
+// Contains file upload logic
 
 // UploadFileWithDebounce uploads a file with debouncing to prevent duplicate uploads
 func UploadFileWithDebounce(syncFolder, filePath string) {
