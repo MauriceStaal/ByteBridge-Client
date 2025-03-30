@@ -80,7 +80,7 @@ func CheckAndSyncFiles(syncFolder string) {
 		}
 		if !found {
 			log.Println("Uploading new local file:", localName)
-			UploadFile(filepath.Join(syncFolder, localName))
+			UploadFile(syncFolder, filepath.Join(syncFolder, localName))
 		}
 	}
 

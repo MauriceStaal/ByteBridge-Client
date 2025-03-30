@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -141,7 +142,7 @@ func HandleFileDeletion(filePath string) {
 }
 
 // UploadFileWithDebounce uploads a file with debouncing to prevent duplicate uploads
-func UploadFileWithDebounce(filePath string) {
+func UploadFileWithDebounce(syncFolder, filePath string) {
 	uploadMutex.Lock() // Lock to prevent concurrent uploads
 	defer uploadMutex.Unlock()
 
@@ -172,17 +173,25 @@ func UploadFileWithDebounce(filePath string) {
 	}
 
 	// Upload the file if it's not a duplicate
-	UploadFile(filePath)
+	UploadFile(syncFolder, filePath)
 
 	// Update the last upload time for the file
 	lastUploaded[filePath] = time.Now()
 }
 
 // UploadFile uploads a new or modified file to the API using multipart/form-data
-func UploadFile(filePath string) {
+func UploadFile(syncFolder, filePath string) {
+	// Get the relative path of the file within the sync folder
+	relativePath, err := filepath.Rel(syncFolder, filePath)
+	if err != nil {
+		log.Println("Error getting relative path:", err)
+		return
+	}
+
+	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		log.Println("Error opening file:", err)
 		return
 	}
 	defer file.Close()
@@ -194,47 +203,64 @@ func UploadFile(filePath string) {
 	// Add the file
 	part, err := writer.CreateFormFile("FileAttachment", filepath.Base(filePath))
 	if err != nil {
-		fmt.Println("Error creating form file:", err)
+		log.Println("Error creating form file:", err)
 		return
 	}
 	_, err = io.Copy(part, file)
 	if err != nil {
-		fmt.Println("Error copying file to form part:", err)
+		log.Println("Error copying file to form part:", err)
 		return
 	}
 
-	// Add the name field
-	_ = writer.WriteField("Name", filepath.Base(filePath))
+	// Add the name field with the relative path
+	if err := writer.WriteField("Name", relativePath); err != nil {
+		log.Println("Error writing 'Name' field:", err)
+		return
+	}
+
+	// Add the path field (absolute path)
+	if err := writer.WriteField("Path", filePath); err != nil {
+		log.Println("Error writing 'Path' field:", err)
+		return
+	}
+
+	// Log the fields before sending the request
+	log.Println("Sending request with Name (relative path):", relativePath)
+	log.Println("Sending request with Path (absolute path):", filePath)
 
 	// Close the writer to finalize the multipart form
 	err = writer.Close()
 	if err != nil {
-		fmt.Println("Error closing writer:", err)
+		log.Println("Error closing writer:", err)
 		return
 	}
 
 	// Create request
 	req, err := http.NewRequest("POST", "https://bytebridge.es8.nl/api/v1/File", body)
 	if err != nil {
-		fmt.Println("Error creating request:", err)
+		log.Println("Error creating request:", err)
 		return
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Log the request headers
+	log.Println("Making POST request to URL:", "https://bytebridge.es8.nl/api/v1/File")
+	log.Println("Request Headers:", req.Header)
 
 	// Send request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Error uploading file:", err)
+		log.Println("Error uploading file:", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println("Failed to upload file, status code:", resp.StatusCode)
+		log.Println("Failed to upload file, status code:", resp.StatusCode)
 		return
 	}
 
-	fmt.Println("File uploaded successfully:", filePath)
+	log.Println("File uploaded successfully:", filePath)
 }
