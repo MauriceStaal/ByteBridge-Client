@@ -9,12 +9,30 @@ import (
 	"io"
 	"io/ioutil"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
+
+// Global configuration
+var (
+	// BaseURL is the main API endpoint
+	// BaseURL = "https://bytebridge.es8.nl"
+	BaseURL = "http://localhost:5191"
+	// APIEndpoint is the REST API path
+	APIEndpoint = "/api/v1"
+	// TCPHost is the host for the TCP notification service
+	TCPHost = "localhost:5000"
+)
+
+// GetAPIURL returns the full API URL with endpoint
+func GetAPIURL(path string) string {
+	return fmt.Sprintf("%s%s%s", BaseURL, APIEndpoint, path)
+}
 
 // File represents the structure of a file from the API response
 type File struct {
@@ -32,7 +50,7 @@ var lastUploaded = make(map[string]time.Time)
 
 // FetchFiles requests the list of files from the API and returns them
 func FetchFiles() ([]File, error) {
-	url := "https://bytebridge.es8.nl/api/v1/File"
+	url := GetAPIURL("/File")
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
@@ -77,38 +95,224 @@ func FileExists(syncFolder, filename string) bool {
 	return err == nil
 }
 
-// SyncFiles checks if the files from the server exist on the client and downloads the missing ones
+// SyncFiles establishes a TCP connection to the server and handles file sync events
 func SyncFiles(syncFolder string) {
+	// Initial sync to get all files at startup
+	initialSync(syncFolder)
+
+	// Setup reconnection with backoff
+	backoffTime := 1 * time.Second
+	maxBackoff := 60 * time.Second
+
 	for {
-		// Fetch the list of files from the server
-		files, err := FetchFiles()
+		fmt.Println("Connecting to file notification server...")
+		// Connect to TCP server
+		conn, err := net.Dial("tcp", TCPHost)
 		if err != nil {
-			fmt.Println("Error fetching files:", err)
-			time.Sleep(30 * time.Second)
+			fmt.Printf("TCP connection failed: %v\n", err)
+			fmt.Printf("Retrying in %v seconds...\n", backoffTime.Seconds())
+			time.Sleep(backoffTime)
+
+			// Increase backoff time for next attempt, up to maximum
+			backoffTime *= 2
+			if backoffTime > maxBackoff {
+				backoffTime = maxBackoff
+			}
 			continue
 		}
 
-		// Check for each file if it exists on the client, and if not, download it
-		for _, file := range files {
-			if !FileExists(syncFolder, file.Name) {
-				fmt.Println("File not found locally, downloading:", file.ID, file.Name)
-				err := DownloadFile(syncFolder, file.ID, file.Name)
-				if err != nil {
-					fmt.Println("Error downloading file:", err)
-				}
-			} else {
-				fmt.Println("File already exists locally:", file.Name)
+		// Reset backoff on successful connection
+		backoffTime = 1 * time.Second
+		fmt.Println("TCP connection established")
+
+		// Handle TCP connection
+		handleTCPConnection(conn, syncFolder)
+
+		// If we get here, the connection was closed
+		fmt.Println("TCP connection closed, reconnecting...")
+		conn.Close()
+		time.Sleep(backoffTime)
+	}
+}
+
+// initialSync performs a one-time sync of all files when the program starts
+func initialSync(syncFolder string) {
+	fmt.Println("Performing initial sync...")
+
+	// Fetch the list of files from the server
+	files, err := FetchFiles()
+	if err != nil {
+		fmt.Println("Error fetching files during initial sync:", err)
+		return
+	}
+
+	// Check for each file if it exists on the client, and if not, download it
+	for _, file := range files {
+		if !FileExists(syncFolder, file.Name) {
+			fmt.Println("File not found locally, downloading:", file.ID, file.Name)
+			err := DownloadFile(syncFolder, file.ID, file.Name)
+			if err != nil {
+				fmt.Println("Error downloading file:", err)
 			}
+		} else {
+			fmt.Println("File already exists locally:", file.Name)
+		}
+	}
+
+	fmt.Println("Initial sync completed")
+}
+
+// handleTCPConnection processes messages from the TCP socket
+func handleTCPConnection(conn net.Conn, syncFolder string) {
+	// Send a hello message to the server to verify the connection is working
+	fmt.Println("TCP connection established, sending hello message...")
+	_, err := conn.Write([]byte("HELLO\n"))
+	if err != nil {
+		fmt.Println("Warning: Failed to send hello message:", err)
+	}
+
+	// Set a read deadline to detect connection issues
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		err = tcpConn.SetKeepAlive(true)
+		if err != nil {
+			fmt.Println("Warning: Failed to set keep alive:", err)
+		}
+		err = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+		if err != nil {
+			fmt.Println("Warning: Failed to set keep alive period:", err)
+		}
+	}
+
+	fmt.Println("Waiting for server messages...")
+
+	// Create a buffer to read directly from the connection
+	buffer := make([]byte, 1024)
+
+	for {
+		// Try direct reading from the connection first
+		n, err := conn.Read(buffer)
+
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Server closed the connection")
+			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				fmt.Println("Connection timed out")
+			} else {
+				fmt.Println("Error reading from TCP socket:", err)
+			}
+			break
 		}
 
-		// Wait for 30 seconds before checking again
-		time.Sleep(30 * time.Second)
+		if n > 0 {
+			// Log the raw message for debugging
+			rawMessage := string(buffer[:n])
+			fmt.Printf("Raw message received (%d bytes): %q\n", n, rawMessage)
+
+			// Process each line in the message
+			lines := strings.Split(strings.ReplaceAll(rawMessage, "\r\n", "\n"), "\n")
+			for _, line := range lines {
+				// Skip empty lines
+				if line == "" {
+					continue
+				}
+
+				// Trim whitespace
+				line = strings.TrimSpace(line)
+				fmt.Printf("Processed line: %q\n", line)
+
+				// Check if the message indicates files have changed
+				if strings.Contains(line, "Files are changed") {
+					fmt.Println("Server notification: Files have changed, syncing...")
+					syncAllFiles(syncFolder)
+				} else {
+					fmt.Printf("Unrecognized message format: %q\n", line)
+				}
+			}
+		} else {
+			fmt.Println("Received 0 bytes, connection may be closed")
+			time.Sleep(100 * time.Millisecond) // Small pause to avoid busy loop
+		}
 	}
+
+	fmt.Println("TCP message handling loop exited")
+}
+
+// syncAllFiles fetches the current list of files and syncs them
+func syncAllFiles(syncFolder string) {
+	// Fetch the list of files from the server
+	files, err := FetchFiles()
+	if err != nil {
+		fmt.Println("Error fetching files during sync:", err)
+		return
+	}
+
+	// Track files that exist on the server to later detect deleted files
+	serverFiles := make(map[string]bool)
+
+	// Check for each file if it exists on the client, and if not, download it
+	for _, file := range files {
+		serverFiles[file.Name] = true
+		localPath := filepath.Join(syncFolder, file.Name)
+
+		if !FileExists(syncFolder, file.Name) {
+			fmt.Println("File not found locally, downloading:", file.ID, file.Name)
+			err := DownloadFile(syncFolder, file.ID, file.Name)
+			if err != nil {
+				fmt.Println("Error downloading file:", err)
+			}
+		} else {
+			// File exists locally, we could check if it's different from the server version
+			// using the hash field from the File struct
+			localFileInfo, err := os.Stat(localPath)
+			if err != nil {
+				fmt.Println("Error checking local file:", err)
+				continue
+			}
+
+			// Check if file size or modification time suggests we need to update
+			// This is a simple heuristic - using file.Hash would be more accurate
+			fmt.Printf("Checking if %s needs updating...\n", file.Name)
+
+			// Parse the server's updated time
+			serverTime, err := time.Parse(time.RFC3339, file.UpdatedOn)
+			if err == nil && localFileInfo.ModTime().Before(serverTime) {
+				fmt.Printf("Local file is older than server version, updating: %s\n", file.Name)
+				err := DownloadFile(syncFolder, file.ID, file.Name)
+				if err != nil {
+					fmt.Println("Error updating file:", err)
+				}
+			} else {
+				fmt.Printf("Local file %s is up to date\n", file.Name)
+			}
+		}
+	}
+
+	// Check for files that exist locally but not on the server (deleted files)
+	localFiles, err := os.ReadDir(syncFolder)
+	if err != nil {
+		fmt.Println("Error reading sync folder:", err)
+		return
+	}
+
+	for _, localFile := range localFiles {
+		if !localFile.IsDir() {
+			// If file exists locally but not on server, delete it
+			if _, exists := serverFiles[localFile.Name()]; !exists {
+				fmt.Println("File deleted on server, removing locally:", localFile.Name())
+				err := os.Remove(filepath.Join(syncFolder, localFile.Name()))
+				if err != nil {
+					fmt.Println("Error deleting local file:", err)
+				}
+			}
+		}
+	}
+
+	fmt.Println("Sync completed")
 }
 
 // DeleteFileOnServer deletes a file from the server
 func DeleteFileOnServer(fileID int) error {
-	url := fmt.Sprintf("https://bytebridge.es8.nl/api/v1/File/%d", fileID)
+	url := GetAPIURL(fmt.Sprintf("/File/%d", fileID))
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create delete request: %w", err)
@@ -214,7 +418,7 @@ func UploadFile(filePath string) {
 	}
 
 	// Create request
-	req, err := http.NewRequest("POST", "https://bytebridge.es8.nl/api/v1/File", body)
+	req, err := http.NewRequest("POST", GetAPIURL("/File"), body)
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return
