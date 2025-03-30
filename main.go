@@ -17,6 +17,10 @@ func main() {
 	}
 
 	syncFolder := filepath.Join(home, "Documents", "SyncFolder")
+
+	// Startup Routine
+	go sync.CheckAndSyncFiles(syncFolder)
+
 	// Start the folder watcher in a separate goroutine
 	go watcher.WatchFolder(syncFolder)
 
