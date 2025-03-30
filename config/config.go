@@ -2,6 +2,9 @@ package config
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"os"
 	"strings"
 )
 
@@ -13,11 +16,31 @@ type Configuration struct {
 
 var Config Configuration
 
+var DebugLogger *log.Logger
+var InfoLogger *log.Logger
+
 func Initialize() {
 	Config = Configuration{
 		APIBaseURL: "https://bytebridge.es8.nl/api/v1",
 		TCPURL:     "bytebridge.es8.nl:8080",
 		Debug:      false,
+	}
+
+	InfoLogger = log.New(os.Stdout, "INFO: ", log.LstdFlags)
+
+	DebugLogger = log.New(io.Discard, "DEBUG: ", log.LstdFlags)
+}
+
+func SetDebugMode(enabled bool) {
+	Config.Debug = enabled
+
+	if enabled {
+		// Enable debug logging to stdout
+		DebugLogger.SetOutput(os.Stdout)
+		DebugLogger.Println("Debug logging enabled")
+	} else {
+		// Disable debug logging
+		DebugLogger.SetOutput(io.Discard)
 	}
 }
 

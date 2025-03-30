@@ -3,7 +3,7 @@ package sync
 // Contains sync logic
 
 import (
-	"fmt"
+	"ByteBridge-Client/config"
 	"time"
 )
 
@@ -13,7 +13,7 @@ func SyncFiles(syncFolder string) {
 		// Fetch the list of files from the server
 		files, err := FetchFiles()
 		if err != nil {
-			fmt.Println("Error fetching files:", err)
+			config.DebugLogger.Println("Error fetching files:", err)
 			time.Sleep(30 * time.Second)
 			continue
 		}
@@ -21,13 +21,13 @@ func SyncFiles(syncFolder string) {
 		// Check for each file if it exists on the client, and if not, download it
 		for _, file := range files {
 			if !FileExists(syncFolder, file.Name) {
-				fmt.Println("File not found locally, downloading:", file.ID, file.Name)
+				config.DebugLogger.Println("File not found locally, downloading:", file.ID, file.Name)
 				err := DownloadFile(syncFolder, file.ID, file.Name)
 				if err != nil {
-					fmt.Println("Error downloading file:", err)
+					config.DebugLogger.Println("Error downloading file:", err)
 				}
 			} else {
-				fmt.Println("File already exists locally:", file.Name)
+				config.DebugLogger.Println("File already exists locally:", file.Name)
 			}
 		}
 

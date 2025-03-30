@@ -6,7 +6,6 @@ import (
 	"ByteBridge-Client/sync"
 	"ByteBridge-Client/watcher"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -23,11 +22,10 @@ func main() {
 
 	// Apply command line arguments to config
 	if *debug {
-		config.Config.Debug = true
+		config.SetDebugMode(true)
 		config.Config.APIBaseURL = "http://localhost:5191/api/v1"
 		config.Config.TCPURL = "localhost:5000"
-		fmt.Println("Debug mode enabled - using local API and TCP URL")
-		fmt.Println("Debug mode enabled - verbose logging active")
+		config.InfoLogger.Println("Debug mode enabled - verbose logging active")
 	}
 
 	if *apiURL != "" {
@@ -36,16 +34,16 @@ func main() {
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Println("Error fetching home dir: ", err)
+		config.InfoLogger.Println("Error fetching home dir: ", err)
 		return
 	}
 
 	syncFolder := filepath.Join(home, "Documents", "SyncFolder")
 	// Ensure the sync folder exists
 	if _, err := os.Stat(syncFolder); os.IsNotExist(err) {
-		fmt.Println("Creating sync folder:", syncFolder)
+		config.InfoLogger.Println("Creating sync folder:", syncFolder)
 		if err := os.MkdirAll(syncFolder, 0755); err != nil {
-			fmt.Println("Error creating sync folder:", err)
+			config.InfoLogger.Println("Error creating sync folder:", err)
 			return
 		}
 	}
@@ -62,9 +60,9 @@ func main() {
 	// Start the TCP socket listener - this will now trigger syncs based on server notifications
 	go socket.ListenForServerChanges(syncFolder, stopSocketChan)
 
-	fmt.Println("ByteBridge-Client started successfully")
-	fmt.Printf("Syncing files with: %s\n", syncFolder)
-	fmt.Printf("API endpoint: %s\n", config.Config.APIBaseURL)
+	config.InfoLogger.Println("ByteBridge-Client started successfully")
+	config.InfoLogger.Println("Syncing files with:", syncFolder)
+	config.InfoLogger.Println("API endpoint:", config.Config.APIBaseURL)
 
 	// Keep the program running
 	for {

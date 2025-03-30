@@ -7,8 +7,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"log"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,7 +42,7 @@ func FetchFiles() ([]File, error) {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -97,18 +96,18 @@ func FetchDeletedFiles() ([]File, error) {
 	}
 	defer resp.Body.Close()
 
-	log.Println("FetchDeletedFiles API response status:", resp.StatusCode)
+	config.DebugLogger.Println("FetchDeletedFiles API response status:", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	log.Println("FetchDeletedFiles API response body:", string(body))
+	config.DebugLogger.Println("FetchDeletedFiles API response body:", string(body))
 
 	var files []File
 	if err := json.Unmarshal(body, &files); err != nil {

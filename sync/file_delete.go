@@ -28,7 +28,7 @@ func DeleteFileOnServer(fileID int) error {
 		return fmt.Errorf("unexpected status code when deleting file: %d", resp.StatusCode)
 	}
 
-	fmt.Println("File deleted successfully from server")
+	config.InfoLogger.Println("File deleted successfully from server")
 	return nil
 }
 
@@ -36,9 +36,9 @@ func DeleteFileOnServer(fileID int) error {
 func HandleFileDeletion(filePath string) {
 	fileID, err := GetFileIDByName(filepath.Base(filePath))
 	if err == nil {
-		fmt.Println("Deleting file from server:", fileID)
+		config.DebugLogger.Println("Deleting file from server:", fileID)
 		DeleteFileOnServer(fileID)
 	} else {
-		fmt.Println("Error finding file ID for deletion:", err)
+		config.DebugLogger.Println("Error finding file ID for deletion:", err)
 	}
 }

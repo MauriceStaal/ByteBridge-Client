@@ -1,11 +1,12 @@
 package watcher
 
 import (
+	"ByteBridge-Client/config"
 	"ByteBridge-Client/sync"
-	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"os"
 	"path/filepath"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 // WatchFolder watches for changes in the sync folder and uploads new, modified, or deleted files
@@ -13,7 +14,7 @@ import (
 func WatchFolder(syncFolder string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Println("Error creating watcher:", err)
+		config.DebugLogger.Println("Error creating watcher:", err)
 		return
 	}
 	defer watcher.Close()
@@ -21,7 +22,7 @@ func WatchFolder(syncFolder string) {
 	// Initial folder scan to add existing folders and subfolders
 	err = watchSubfolders(syncFolder, watcher)
 	if err != nil {
-		fmt.Println("Error while watching subfolders:", err)
+		config.DebugLogger.Println("Error while watching subfolders:", err)
 		return
 	}
 
@@ -36,27 +37,27 @@ func WatchFolder(syncFolder string) {
 
 				switch {
 				case event.Op&(fsnotify.Create|fsnotify.Write) != 0:
-					fmt.Println("Detected change in:", event.Name)
+					config.DebugLogger.Println("Detected change in:", event.Name)
 					sync.UploadFileWithDebounce(syncFolder, event.Name)
 
 					// If a new subfolder is created, add it to the watcher
 					if isDirectory(event.Name) {
 						err := watcher.Add(event.Name)
 						if err != nil {
-							fmt.Println("Error adding new subfolder to watcher:", err)
+							config.DebugLogger.Println("Error adding new subfolder to watcher:", err)
 						} else {
-							fmt.Println("Started watching new subfolder:", event.Name)
+							config.DebugLogger.Println("Started watching new subfolder:", event.Name)
 						}
 					}
 
 				case event.Op&fsnotify.Remove != 0:
-					fmt.Println("Detected deletion of:", event.Name)
+					config.DebugLogger.Println("Detected deletion of:", event.Name)
 					sync.HandleFileDeletion(event.Name)
 
 				case event.Op&fsnotify.Rename != 0:
 					// Rename could mean either a rename or deletion (on Linux)
 					if _, err := os.Stat(event.Name); os.IsNotExist(err) {
-						fmt.Println("Detected possible deletion (rename event):", event.Name)
+						config.DebugLogger.Println("Detected possible deletion (rename event):", event.Name)
 						sync.HandleFileDeletion(event.Name)
 					}
 				}
@@ -65,7 +66,7 @@ func WatchFolder(syncFolder string) {
 				if !ok {
 					return
 				}
-				fmt.Println("Watcher error:", err)
+				config.DebugLogger.Println("Watcher error:", err)
 			}
 		}
 	}()
@@ -84,10 +85,10 @@ func watchSubfolders(syncFolder string, watcher *fsnotify.Watcher) error {
 		if info.IsDir() {
 			err = watcher.Add(path)
 			if err != nil {
-				fmt.Println("Error adding folder to watcher:", err)
+				config.DebugLogger.Println("Error adding folder to watcher:", err)
 				return err
 			}
-			fmt.Println("Watching folder:", path)
+			config.DebugLogger.Println("Watching folder:", path)
 		}
 		return nil
 	})
