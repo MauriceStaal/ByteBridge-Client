@@ -22,7 +22,7 @@ var InfoLogger *log.Logger
 func Initialize() {
 	Config = Configuration{
 		APIBaseURL: "https://bytebridge.es8.nl/api/v1",
-		TCPURL:     "bytebridge-tcp.es8.nl:5000", // not working
+		TCPURL:     "bytebridge-tcp.es8.nl:443",
 		Debug:      false,
 	}
 
