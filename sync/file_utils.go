@@ -3,6 +3,7 @@ package sync
 // Contains logic to handle files
 
 import (
+	"ByteBridge-Client/config"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -31,7 +32,7 @@ var lastUploaded = make(map[string]time.Time)
 
 // FetchFiles requests the list of files from the API and returns them
 func FetchFiles() ([]File, error) {
-	url := "https://bytebridge.es8.nl/api/v1/File"
+	url := config.APIEndpoint("/File")
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
@@ -88,7 +89,8 @@ func CalculateFileHash(filePath string) (string, error) {
 
 // FetchDeletedFiles retrieves the list of deleted files from the server
 func FetchDeletedFiles() ([]File, error) {
-	url := "https://bytebridge.es8.nl/api/v1/File/deleted"
+	url := config.APIEndpoint("/File/deleted")
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)

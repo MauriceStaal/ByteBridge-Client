@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"ByteBridge-Client/config"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 
 // DownloadFile downloads a missing file from the API
 func DownloadFile(syncFolder string, fileID int, filename string) error {
-	url := fmt.Sprintf("https://bytebridge.es8.nl/api/v1/File/%d", fileID)
+	url := fmt.Sprintf(config.APIEndpoint("/File/%d"), fileID)
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download file %s: %w", filename, err)

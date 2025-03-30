@@ -3,6 +3,7 @@ package sync
 // Contains logic for deleting files
 
 import (
+	"ByteBridge-Client/config"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -10,7 +11,7 @@ import (
 
 // DeleteFileOnServer deletes a file from the server
 func DeleteFileOnServer(fileID int) error {
-	url := fmt.Sprintf("https://bytebridge.es8.nl/api/v1/File/%d", fileID)
+	url := fmt.Sprintf(config.APIEndpoint("/File/%d"), fileID)
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create delete request: %w", err)

@@ -3,6 +3,7 @@ package sync
 // Contains logic for uploading files
 
 import (
+	"ByteBridge-Client/config"
 	"bytes"
 	"fmt"
 	"io"
@@ -111,7 +112,7 @@ func UploadFile(syncFolder, filePath string) {
 	}
 
 	// Create request
-	req, err := http.NewRequest("POST", "https://bytebridge.es8.nl/api/v1/File", body)
+	req, err := http.NewRequest("POST", config.APIEndpoint("/File"), body)
 	if err != nil {
 		log.Println("Error creating request:", err)
 		return
@@ -119,7 +120,7 @@ func UploadFile(syncFolder, filePath string) {
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	// Log the request headers
-	log.Println("Making POST request to URL:", "https://bytebridge.es8.nl/api/v1/File")
+	log.Println("Making POST request to URL:", config.APIEndpoint("/File"))
 	log.Println("Request Headers:", req.Header)
 
 	// Send request
