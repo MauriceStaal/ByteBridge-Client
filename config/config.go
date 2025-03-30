@@ -22,7 +22,7 @@ var InfoLogger *log.Logger
 func Initialize() {
 	Config = Configuration{
 		APIBaseURL: "https://bytebridge.es8.nl/api/v1",
-		TCPURL:     "bytebridge.es8.nl:8080",
+		TCPURL:     "https://bytebridge-tcp.es8.nl",
 		Debug:      false,
 	}
 
@@ -57,4 +57,10 @@ func APIEndpoint(path string) string {
 func SetAPIBaseURL(url string) {
 	Config.APIBaseURL = strings.TrimRight(url, "/")
 	fmt.Println("API URL set to:", Config.APIBaseURL)
+}
+
+// SetTCPURL updates the TCP URL
+func SetTCPURL(url string) {
+	Config.TCPURL = strings.TrimRight(url, "/")
+	fmt.Println("TCP URL set to:", Config.TCPURL)
 }

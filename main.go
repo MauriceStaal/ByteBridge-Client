@@ -18,18 +18,21 @@ func main() {
 	// Add command-line flags
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	apiURL := flag.String("api", "", "Override API base URL (e.g., http://localhost:5191/api/v1)")
+	tcpURL := flag.String("tcp", "", "Override TCP URL (e.g., localhost:5000)")
 	flag.Parse()
 
 	// Apply command line arguments to config
 	if *debug {
 		config.SetDebugMode(true)
-		config.Config.APIBaseURL = "http://localhost:5191/api/v1"
-		config.Config.TCPURL = "localhost:5000"
 		config.InfoLogger.Println("Debug mode enabled - verbose logging active")
 	}
 
 	if *apiURL != "" {
 		config.SetAPIBaseURL(*apiURL)
+	}
+
+	if *tcpURL != "" {
+		config.SetTCPURL(*tcpURL)
 	}
 
 	home, err := os.UserHomeDir()
