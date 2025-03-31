@@ -1,7 +1,6 @@
 package socket
 
 import (
-	"bufio"
 	"net"
 	"sync"
 	"time"
@@ -58,11 +57,11 @@ func ListenForServerChanges(syncFolder string, stopChan chan bool) {
 		config.DebugLogger.Println("Successfully connected to TCP server")
 		defer conn.Close()
 
-		reader := bufio.NewReader(conn)
+		buffer := make([]byte, 1024)
 
 		for {
 			// Read message from server
-			message, err := reader.ReadString('\n')
+			n, err := conn.Read(buffer)
 			if err != nil {
 				config.DebugLogger.Printf("Error reading from TCP server: %v. Reconnecting...", err)
 				time.Sleep(3 * time.Second)
@@ -70,6 +69,7 @@ func ListenForServerChanges(syncFolder string, stopChan chan bool) {
 				return
 			}
 
+			message := string(buffer[:n])
 			config.DebugLogger.Printf("Received message from server: %s", message)
 
 			// Any message from the server indicates changes that require sync
