@@ -57,10 +57,11 @@ func ListenForServerChanges(syncFolder string, stopChan chan bool) {
 		config.DebugLogger.Println("Successfully connected to TCP server")
 		defer conn.Close()
 
+		// Create a buffer to read incoming messages
 		buffer := make([]byte, 1024)
 
 		for {
-			// Read message from server
+			// Read message from server and place into buffer
 			n, err := conn.Read(buffer)
 			if err != nil {
 				config.DebugLogger.Printf("Error reading from TCP server: %v. Reconnecting...", err)
