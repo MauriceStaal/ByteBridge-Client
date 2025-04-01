@@ -4,7 +4,8 @@ package sync
 
 import (
 	"ByteBridge-Client/config"
-	"crypto/md5"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -76,14 +77,36 @@ func FileExists(syncFolder, filename string) bool {
 	return err == nil
 }
 
-// CalculateFileHash computes the MD5 hash of a file, which is used to check if files are identical
+// GetFileIDByHash retrieves the file ID from the server by file hash
+func GetFileIDByHash(fileHash string) (int, error) {
+	files, err := FetchFiles()
+	if err != nil {
+		return 0, err
+	}
+
+	for _, file := range files {
+		if file.Hash == fileHash { // Controleer op hash in plaats van naam
+			return file.ID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("file with hash %s not found", fileHash)
+}
+
+// CalculateFileHash calculates the SHA-256 hash of a file
 func CalculateFileHash(filePath string) (string, error) {
-	data, err := os.ReadFile(filePath)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
-	hash := fmt.Sprintf("%x", md5.Sum(data))
-	return hash, nil
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 // FetchDeletedFiles retrieves the list of deleted files from the server
